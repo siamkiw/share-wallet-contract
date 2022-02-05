@@ -8,7 +8,7 @@ contract ShareWallet {
 
     uint accountBalance;
 
-    mapping(address => Allowance) public balanceReceived;
+    mapping(address => uint) public allowance;
 
     constructor(){
         owner = msg.sender;
@@ -19,18 +19,22 @@ contract ShareWallet {
         _;
     }
 
-    modifier onlyUser {
-        require(msg.sender != owner, "You are not user.");
+    modifier ownerOrAllowance(uint _amount) {
+        require(isOwner() || allowance[msg.sender] >= _amount,  "You are not allowance or you has not enough funds.");
         _;
     }
 
-    struct Allowance {
-        uint balance;
-        bool isAllow;
-    }
+    event Receive (
+        address sender,
+        uint amount
+    );
 
     receive() external payable {
-        accountBalance += msg.value;
+        emit Receive(msg.sender, msg.value);
+    }
+
+    function isOwner() public view returns (bool){
+        return msg.sender == owner;
     }
 
     function getBalance() public view returns (uint) {
@@ -43,47 +47,32 @@ contract ShareWallet {
         uint _amount
     );
 
-    function withdrawMoney(address payable _to, uint _amount) public onlyUser {
-
-        require(balanceReceived[msg.sender].isAllow == true, "You account is not allow.");
-        require(balanceReceived[msg.sender].balance >= _amount, "You account has not enough funds.");
+    function withdrawMoney(address payable _to, uint _amount) public ownerOrAllowance(_amount) {
         require(getBalance() >= _amount, "Contract has not enough funds.");
 
-        balanceReceived[msg.sender].balance -= _amount;
-
-        _to.transfer(_amount);
+        if(!isOwner()){
+            allowance[msg.sender] -= _amount;
+        }
 
         emit WithdrawMoney(msg.sender ,_to, _amount);
+
+        _to.transfer(_amount);
     }
 
-    event WithdrawMoneyOwner (
+
+    event UpdateAllowance (
         address _from,
         address _to,
         uint _amount
     );
 
-    function withdrawMoneyOwner(address payable _to, uint _amount) public onlyOwner {
+    function updateAllowance(address _to, uint _amount) public onlyOwner {
         require(getBalance() >= _amount, "Contract has not enough funds.");
 
-        _to.transfer(_amount);
+        emit UpdateAllowance(msg.sender, _to, _amount);
 
-        emit WithdrawMoneyOwner(msg.sender, _to, _amount);
-    }
+        allowance[_to] = _amount;
 
-    event UpdateAllowance (
-        address _from,
-        address _to,
-        uint _amount,
-        bool _isAllow
-    );
-
-    function updateAllowance(address _to, uint _amount, bool _isAllow) public onlyOwner {
-        require(getBalance() >= _amount, "Contract has not enough funds.");
-
-        balanceReceived[_to].balance = _amount;
-        balanceReceived[_to].isAllow = _isAllow;
-
-        emit UpdateAllowance(msg.sender, _to, _amount, _isAllow);
     }
 
 
